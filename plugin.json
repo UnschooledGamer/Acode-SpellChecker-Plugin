@@ -1,0 +1,27 @@
+{
+  "author": {
+    "email": "unschooledgamer+acodeeditor@gmail.com",
+    "github": "Unschooled Gamer",
+    "name": "Unschooled Gamer",
+    "url": "https://github.com/unschooledgamer/"
+  },
+  "changelogs": "changelogs.md",
+  "description": "A DEAD Simple Spell Checker for Acode Editor",
+  "files": [],
+  "icon": "icon.png",
+  "id": "ug.acode-plugin.spellchecker",
+  "keywords": [
+    "Spell Checker",
+    "Spell",
+    "Spelling",
+    "Spellings validation"
+  ],
+  "license": "MIT",
+  "main": "dist/main.js",
+  "minVersionCode": 292,
+  "name": "Acode Spell Checker",
+  "price": 0,
+  "readme": "readme.md",
+  "repository": "https://github.com/unschooledgamer/acode-spellchecker-plugin",
+  "version": "0.0.0"
+}
