@@ -9,7 +9,7 @@
   "description": "A DEAD Simple Spell Checker for Acode Editor",
   "files": [],
   "icon": "icon.png",
-  "id": "ug.acode-plugin.spellchecker",
+  "id": "ug.acode_plugin.spellchecker",
   "keywords": [
     "Spell Checker",
     "Spell",
@@ -23,5 +23,5 @@
   "price": 0,
   "readme": "readme.md",
   "repository": "https://github.com/unschooledgamer/acode-spellchecker-plugin",
-  "version": "0.0.0"
+  "version": "0.0.1"
 }
