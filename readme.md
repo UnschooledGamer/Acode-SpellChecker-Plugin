@@ -1,5 +1,4 @@
 # Acode Spell Checker Plugin
-> update Plugin icon 🙃
 
 A DEAD simple spell checker plugin for the Acode editor.
 
