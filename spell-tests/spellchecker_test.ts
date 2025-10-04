@@ -1,6 +1,8 @@
 // spellchecker_test.ts
 // Auto-generated: 500 literal lines for spellchecker test
 
+const a = 8
+
 export const testLines: string[] = [
   "Thiss line has a speling error.",
   "The quick brown fox jumps over the lazy dog.",

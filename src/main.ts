@@ -9,19 +9,25 @@ class AcodePlugin {
     private currentlySpellChecking = false
     private currentMarkers: number[] = []
     private dictionary: Typo | null = null;
+    private debounceTimer: number | null = null;
+    private readonly DEBOUNCE_DELAY = 500; // ms
 
     // Check the spelling of a line, and return [start, end]-pairs for misspelled words.
-    public misspelled(line: string) {
-        var words = line.split(/[^a-zA-Z\-']/);
-        var i = 0;
-        var bads = [];
-        for (var word in words) {
-            var x = words[word] + "";
-            var checkWord = x.replace(/[^a-zA-Z\-']/g, '');
-            if (!this.dictionary?.check(checkWord)) {
-                bads[bads.length] = [i, i + words[word].length];
+    public misspelled(line: string): number[][] {
+        const words = line.split(/([^a-zA-Z\-']+)/);
+        let i = 0;
+        const bads: number[][] = [];
+
+        for (let j = 0; j < words.length; j++) {
+            const word = words[j];
+            // Only check actual words (not separators)
+            if (/^[a-zA-Z\-']+$/.test(word)) {
+                const checkWord = word.replace(/[^a-zA-Z\-']/g, '');
+                if (checkWord && this.dictionary && !this.dictionary.check(checkWord)) {
+                    bads.push([i, i + word.length]);
+                }
             }
-            i += words[word].length + 1;
+            i += word.length;
         }
         return bads;
     }
@@ -29,7 +35,7 @@ class AcodePlugin {
     async init($page: WCPage, cacheFile: any, cacheFileUrl: string): Promise<void> {
 
         console.log(this.baseUrl)
-        this.dictionary = new Typo("en_US", null, null, { dictionaryPath: `${this.baseUrl}/dictionaries` });
+        this.dictionary = new Typo("en_US", undefined, undefined, { dictionaryPath: `${this.baseUrl}/dictionaries` });
 
         editorManager.editor.commands.addCommand({
             name: "Spell Check",
@@ -39,54 +45,149 @@ class AcodePlugin {
                 this.spellCheckOfFile()
                 console.log(performance.now() - startTime)
             },
-        })
+        });
 
-        document.head.insertAdjacentHTML("beforeend", this.styleMarkerLayer)
-        document.head.insertAdjacentHTML("beforeend", this.styleMisspelledMarker)
+        // Add real-time spell checking
+        const session = editorManager.activeFile.session;
+        // @ts-ignore
+        session.on('change', () => {
+            this.onEditorChange();
+        });
+
+        document.head.insertAdjacentHTML("beforeend", this.styleMarkerLayer);
+        document.head.insertAdjacentHTML("beforeend", this.styleMisspelledMarker);
 
     }
 
-    spellCheckOfFile() {
+    // Handle editor changes with debouncing
+    private onEditorChange(): void {
+        // Clear existing timer
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+        }
+
+        // Set new timer
+        // @ts-ignore
+        this.debounceTimer = setTimeout(() => {
+            this.spellCheckVisibleLines();
+        }, this.DEBOUNCE_DELAY);
+    }
+
+    // Spell check only the visible lines for better performance
+    private spellCheckVisibleLines(): void {
+        if (this.currentlySpellChecking) return;
+
+        this.currentlySpellChecking = true;
+
+        try {
+            const session = editorManager.activeFile.session;
+            const Range = ace.require('ace/range').Range;
+
+            // Get visible range
+            // @ts-ignore
+            const visibleRange = editorManager.editor.renderer.$textLayer.visibleRange || { start: { row: 0 }, end: { row: session.getLength() - 1 } };
+            const startRow = Math.max(0, visibleRange.start.row - 5); // Check a few extra lines
+            const endRow = Math.min(session.getLength() - 1, visibleRange.end.row + 5);
+
+            // Clear existing markers in visible range
+            this.clearMarkersInRange(startRow, endRow);
+
+            // Check spelling for visible lines
+            for (let row = startRow; row <= endRow; row++) {
+                const line = session.getLine(row);
+                const misspellings = this.misspelled(line);
+
+                // Add markers for misspelled words
+                for (const [startCol, endCol] of misspellings) {
+                    // @ts-ignore
+                    const range = new Range(row, startCol, row, endCol);
+                    const markerId = session.addMarker(range, "misspelled", "text", true);
+                    this.currentMarkers.push(markerId);
+                }
+            }
+        } finally {
+            this.currentlySpellChecking = false;
+        }
+    }
+
+    // Clear markers in a specific range
+    private clearMarkersInRange(startRow: number, endRow: number): void {
+        const session = editorManager.activeFile.session;
+
+        // Filter out markers that are in the range
+        const markersToKeep: number[] = [];
+        for (const markerId of this.currentMarkers) {
+            // @ts-ignore
+            const marker = session.getMarkers()[markerId];
+            if (marker) {
+                const markerRow = marker.range?.start.row;
+                if (markerRow && (markerRow < startRow || markerRow > endRow)) {
+                    markersToKeep.push(markerId);
+                } else {
+                    session.removeMarker(markerId);
+                }
+            }
+        }
+        this.currentMarkers = markersToKeep;
+    }
+
+    spellCheckOfFile(): void {
         console.log("AcodePlugin :: spell Check", editorManager.activeFile.name);
 
         const session = editorManager.activeFile.session;
 
         try {
-            var Range = ace.require('ace/range').Range
-            var lines = session.getDocument().getAllLines();
-            for (var i in lines) {
-                // Check spelling of this line.
-                //@ts-ignore
-                var misspellings = this.misspelled(lines[i]);
+            // Clear all existing markers first
+            this.clearAllMarkers();
 
-                // Add markers and gutter markings.
-                if (misspellings.length > 0) {
-                    //@ts-ignore
-                    session.addGutterDecoration(lines[i], "misspelled");
-                }
-                for (var j in misspellings) {
-                    var range = new Range(i, misspellings[j][0], i, misspellings[j][1]);
-                    this.currentMarkers[this.currentMarkers.length] = session.addMarker(range, "misspelled", "text", true);
+            const Range = ace.require('ace/range').Range;
+            const lines = session.getDocument().getAllLines();
+            for (let i = 0; i < lines.length; i++) {
+                // Check spelling of this line.
+                const misspellings = this.misspelled(lines[i]);
+
+                // Add markers for misspelled words
+                for (const [startCol, endCol] of misspellings) {
+                    // @ts-ignore
+                    const range = new Range(i, startCol, i, endCol);
+                    const markerId = session.addMarker(range, "misspelled", "text", true);
+                    this.currentMarkers.push(markerId);
                 }
             }
         } finally {
             this.currentlySpellChecking = false;
-            // contents_modified = false;
         }
     }
 
+    // Clear all markers
+    private clearAllMarkers(): void {
+        const session = editorManager.activeFile.session;
+        for (const markerId of this.currentMarkers) {
+            session.removeMarker(markerId);
+        }
+        this.currentMarkers = [];
+    }
 
-    async destroy() {
-        // Add your cleanup code here
+
+    async destroy(): Promise<void> {
+        // Clear any pending debounce timer
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+        }
+
+        // Remove command
         editorManager.editor.commands.removeCommand({
             name: "Spell Check",
-            description: "Spell Check",
-            exec: this.spellCheckOfFile,
-        })
+            exec: () => this.spellCheckOfFile(),
+        });
 
-        document.getElementById("spellMarker")?.remove()
-        document.getElementById("misspelledMarker")?.remove()
-        console.info("Spell Check cmd removed")
+        // Clear all markers
+        this.clearAllMarkers();
+
+        // Remove styles
+        document.getElementById("spellMarker")?.remove();
+        document.getElementById("misspelledMarker")?.remove();
+        console.info("Spell Check cmd removed");
     }
 }
 
@@ -100,7 +201,7 @@ if (window.acode) {
         try {
             await acodePlugin.init($page, cacheFile, cacheFileUrl);
         } catch (e) {
-            console.error(e)
+            console.error(e);
         }
     });
     acode.setPluginUnmount(plugin.id, () => {
