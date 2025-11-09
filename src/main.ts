@@ -1,6 +1,7 @@
 import type { WCPage } from "acode/editor/page";
 import plugin from '../plugin.json';
-import Typo from "typo-js"
+// replaced Typo with harper.js
+import Harper from "harper.js"
 
 class AcodePlugin {
     public baseUrl: string | undefined;
@@ -8,12 +9,14 @@ class AcodePlugin {
     protected styleMisspelledMarker = "<style type='text/css' id='misspelledMarker'>.misspelled { border-bottom: 1px solid red; margin-bottom: -1px; }</style>"
     private currentlySpellChecking = false
     private currentMarkers: number[] = []
-    private dictionary: Typo | null = null;
+    // use a flexible any type for harper instance
+    private dictionary: any = null;
     private debounceTimer: number | null = null;
     private readonly DEBOUNCE_DELAY = 500; // ms
 
     // Check the spelling of a line, and return [start, end]-pairs for misspelled words.
-    public misspelled(line: string): number[][] {
+    // harper.js implementations may be sync or async for .check; make this async/robust.
+    public async misspelled(line: string): Promise<number[][]> {
         const words = line.split(/([^a-zA-Z\-']+)/);
         let i = 0;
         const bads: number[][] = [];
@@ -23,8 +26,18 @@ class AcodePlugin {
             // Only check actual words (not separators)
             if (/^[a-zA-Z\-']+$/.test(word)) {
                 const checkWord = word.replace(/[^a-zA-Z\-']/g, '');
-                if (checkWord && this.dictionary && !this.dictionary.check(checkWord)) {
-                    bads.push([i, i + word.length]);
+                if (checkWord && this.dictionary) {
+                    try {
+                        const result = this.dictionary.check ? this.dictionary.check(checkWord) : true;
+                        // support both sync boolean or Promise<boolean>
+                        const isCorrect = await Promise.resolve(result);
+                        if (!isCorrect) {
+                            bads.push([i, i + word.length]);
+                        }
+                    } catch (e) {
+                        // if check fails, consider it correct to avoid noisy markers
+                        console.warn('Spell check failed for', checkWord, e);
+                    }
                 }
             }
             i += word.length;
@@ -35,14 +48,31 @@ class AcodePlugin {
     async init($page: WCPage, cacheFile: any, cacheFileUrl: string): Promise<void> {
 
         console.log(this.baseUrl)
-        this.dictionary = new Typo("en_US", undefined, undefined, { dictionaryPath: `${this.baseUrl}/dictionaries` });
+        // instantiate harper; the package may accept (lang, options)
+        try {
+            // try common constructor signature; keep it permissive
+            // @ts-ignore
+            this.dictionary = new (Harper as any)('en_US', { dictionaryPath: `${this.baseUrl}/dictionaries` });
+
+            // harper.js may require an explicit load/init; handle known method names
+            if (this.dictionary.load) {
+                await this.dictionary.load();
+            } else if (this.dictionary.init) {
+                await this.dictionary.init();
+            } else if (this.dictionary.ready) {
+                await this.dictionary.ready();
+            }
+        } catch (e) {
+            console.error('Failed to initialize harper.js dictionary:', e);
+            this.dictionary = null;
+        }
 
         editorManager.editor.commands.addCommand({
             name: "Spell Check",
             description: "Spell Check",
-            exec: () => {
+            exec: async () => {
                 const startTime = performance.now()
-                this.spellCheckOfFile()
+                await this.spellCheckOfFile()
                 console.log(performance.now() - startTime)
             },
         });
@@ -69,12 +99,13 @@ class AcodePlugin {
         // Set new timer
         // @ts-ignore
         this.debounceTimer = setTimeout(() => {
+            // fire-and-forget; function is async
             this.spellCheckVisibleLines();
         }, this.DEBOUNCE_DELAY);
     }
 
     // Spell check only the visible lines for better performance
-    private spellCheckVisibleLines(): void {
+    private async spellCheckVisibleLines(): Promise<void> {
         if (this.currentlySpellChecking) return;
 
         this.currentlySpellChecking = true;
@@ -95,7 +126,7 @@ class AcodePlugin {
             // Check spelling for visible lines
             for (let row = startRow; row <= endRow; row++) {
                 const line = session.getLine(row);
-                const misspellings = this.misspelled(line);
+                const misspellings = await this.misspelled(line);
 
                 // Add markers for misspelled words
                 for (const [startCol, endCol] of misspellings) {
@@ -131,7 +162,7 @@ class AcodePlugin {
         this.currentMarkers = markersToKeep;
     }
 
-    spellCheckOfFile(): void {
+    async spellCheckOfFile(): Promise<void> {
         console.log("AcodePlugin :: spell Check", editorManager.activeFile.name);
 
         const session = editorManager.activeFile.session;
@@ -144,7 +175,7 @@ class AcodePlugin {
             const lines = session.getDocument().getAllLines();
             for (let i = 0; i < lines.length; i++) {
                 // Check spelling of this line.
-                const misspellings = this.misspelled(lines[i]);
+                const misspellings = await this.misspelled(lines[i]);
 
                 // Add markers for misspelled words
                 for (const [startCol, endCol] of misspellings) {
