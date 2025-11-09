@@ -26,13 +26,14 @@ const zipPlugin = {
 
 // Base build configuration
 let buildConfig = {
-  entryPoints: ["src/main.ts"],
+  entryPoints: ["src/main.ts", "src/Utils/TreeSitterManager.ts"],
   bundle: true,
   minify: true,
   logLevel: "info",
   color: true,
   outdir: "dist",
   plugins: [zipPlugin],
+  external: ["fs", "path", "module"]
 };
 
 // Main function to handle both serve and production builds
