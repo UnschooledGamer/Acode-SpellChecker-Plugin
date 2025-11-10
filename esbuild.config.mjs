@@ -28,12 +28,14 @@ const zipPlugin = {
 let buildConfig = {
   entryPoints: ["src/main.ts"],
   bundle: true,
-  minify: true,
+  // minify: true,
+  treeShaking: true,
   logLevel: "info",
   color: true,
   outdir: "dist",
   plugins: [zipPlugin],
-  external: ["fs", "path", "module"]
+  external: ["fs", "path", "module"],
+  define: { binaryUrl: '"https://localhost"' }
 };
 
 // Main function to handle both serve and production builds
