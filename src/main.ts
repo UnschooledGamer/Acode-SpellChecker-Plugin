@@ -1,7 +1,7 @@
 import type { WCPage } from "acode/editor/page";
 import plugin from '../plugin.json';
 // replaced Typo with harper.js
-import Harper from "harper.js"
+import { binaryInlined, WorkerLinter } from "harper.js"
 
 class AcodePlugin {
     public baseUrl: string | undefined;
@@ -28,7 +28,7 @@ class AcodePlugin {
                 const checkWord = word.replace(/[^a-zA-Z\-']/g, '');
                 if (checkWord && this.dictionary) {
                     try {
-                        const result = this.dictionary.check ? this.dictionary.check(checkWord) : true;
+                        const result = this.dictionary.lint ? this.dictionary.lint(checkWord) : true;
                         // support both sync boolean or Promise<boolean>
                         const isCorrect = await Promise.resolve(result);
                         if (!isCorrect) {
@@ -52,7 +52,7 @@ class AcodePlugin {
         try {
             // try common constructor signature; keep it permissive
             // @ts-ignore
-            this.dictionary = new (Harper as any)('en_US', { dictionaryPath: `${this.baseUrl}/dictionaries` });
+            this.dictionary = new WorkerLinter({ binary: binaryInlined})
 
             // harper.js may require an explicit load/init; handle known method names
             if (this.dictionary.load) {

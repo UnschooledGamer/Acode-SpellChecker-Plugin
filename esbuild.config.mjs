@@ -26,7 +26,7 @@ const zipPlugin = {
 
 // Base build configuration
 let buildConfig = {
-  entryPoints: ["src/main.ts", "src/Utils/TreeSitterManager.ts"],
+  entryPoints: ["src/main.ts"],
   bundle: true,
   minify: true,
   logLevel: "info",
