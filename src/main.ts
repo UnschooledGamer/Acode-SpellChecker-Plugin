@@ -57,16 +57,16 @@ class AcodePlugin {
         try {
             // try common constructor signature; keep it permissive
             // @ts-ignore
-            this.dictionary = new WorkerLinter({ binary: binaryInlined})
+            this.dictionary = new WorkerLinter({ binary: binaryInlined })
 
             // harper.js may require an explicit load/init; handle known method names
-            if (this.dictionary.load) {
-                await this.dictionary.load();
-            } else if (this.dictionary.init) {
-                await this.dictionary.init();
-            } else if (this.dictionary.ready) {
-                await this.dictionary.ready();
-            }
+            // if (this.dictionary.load) {
+            //     await this.dictionary.load();
+            // } else if (this.dictionary.init) {
+            //     await this.dictionary.init();
+            // } else if (this.dictionary.ready) {
+            //     await this.dictionary.ready();
+            // }
         } catch (e) {
             console.error('Failed to initialize harper.js dictionary:', e);
             this.dictionary = null;
