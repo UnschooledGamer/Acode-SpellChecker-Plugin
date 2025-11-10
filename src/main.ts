@@ -28,9 +28,14 @@ class AcodePlugin {
                 const checkWord = word.replace(/[^a-zA-Z\-']/g, '');
                 if (checkWord && this.dictionary) {
                     try {
-                        const result = this.dictionary.lint ? this.dictionary.lint(checkWord) : true;
+                        const results = await Promise.resolve(this.dictionary.lint ? this.dictionary.lint(checkWord) : true);
+                        console.log(results)
+                        for (const lint of results) {
+                            console.log(`checkWord: "${checkWord}" :: result: `, lint.message())
+                        }
                         // support both sync boolean or Promise<boolean>
-                        const isCorrect = await Promise.resolve(result);
+                        const isCorrect = results.length === 0;
+                        console.log(`Word "${checkWord}" is correct: ${isCorrect ? "Yes Sir" : "Ops NO..."}`);
                         if (!isCorrect) {
                             bads.push([i, i + word.length]);
                         }

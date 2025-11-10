@@ -12,7 +12,8 @@
         "strict": true,
         "skipLibCheck": true,
         "types": [
-            "@acode-app/types"
+            "@acode-app/types",
+            "@types/node"
         ],
         "paths": {
             "acode/*": [
